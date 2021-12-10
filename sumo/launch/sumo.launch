@@ -1,0 +1,71 @@
+<launch>
+  <!-- Launch ROS nodes needed to run the sumo bot -->
+  
+  <!-- Command line argument for image viewing-->
+  <arg name="show" default="false"/>
+  
+  <!-- Command line argument for rviz -->
+  <arg name="rviz" default="false"/>
+
+  <!-- URDF parameter. -->
+  <arg name="urdf"  default="bot.urdf"/>
+  <arg name="model" default="/home/pi/robot_ws/src/cs129-class-shared/bot_description/urdf/$(arg urdf)"/>
+
+  <!-- Rviz configuration file parameter. -->
+  <arg name="cfg"   default="$(find sumo)/rviz/localize.rviz"/>
+
+
+  <!-- Load the URDF file into the robot_description parameter. -->
+  <param name="robot_description" textfile="$(arg model)"/>
+
+
+  <!-- Start the low-level wheelcontrol node -->
+  <node name="wheelcontrol"
+	pkg="sumo"
+	type="wheelcontrol.py"
+	output="screen"/>
+
+  <!-- Start the odometry node -->
+  <node name="odometry"
+	pkg="sumo"
+	type="odometry.py"
+	output="screen"/>
+	
+  <!-- Start the localization node -->
+  <node name="localize"
+	pkg="sumo"
+	type="localize.py"
+	output="screen"/>
+	
+  <!-- Start camera line laser triangulation scan node -->
+  <node name="cameratolaserscan"
+	pkg="sumo"
+	type="cameratolaserscan.py"
+	output="screen"
+	args="$(arg show)"/>
+
+
+  <!-- Start the teleop node SEPARATELY 
+  <node name="teleop"
+	pkg="sumo"
+	type="teleop.py"
+	output="screen"
+	args="20 20"/>
+	-->
+
+  <group if="$(arg rviz)">
+    <!-- Publish all the robot frames. -->
+    <node name="robot_state_publisher"
+  	pkg="robot_state_publisher"
+    	type="robot_state_publisher"/>
+
+    <!-- Run the rviz visualization, with the specified config file -->
+    <!-- Kill everything if this stops. -->
+    <node pkg="rviz"
+  	  type="rviz"
+	  name="rviz"
+	  args="-d $(arg cfg)"
+	  output="screen"
+	  required="true"/>
+  </group>
+</launch>

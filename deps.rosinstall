@@ -1,0 +1,3 @@
+- git:
+    local-name: cs129-class-shared
+    uri: git@gitlab.caltech.edu:cs129-21sp/cs129-class-shared.git
