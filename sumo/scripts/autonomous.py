@@ -28,6 +28,10 @@ from geometry_msgs.msg      import Twist
 from nav_msgs.msg           import OccupancyGrid
 from sensor_msgs.msg        import LaserScan
 from visualization_msgs.msg import Marker
+from sensor_msgs.msg        import Range
+from std_msgs.msg           import Byte
+from std_msgs.msg           import Float32MultiArray
+
 
 from PlanarTransform import PlanarTransform
 
@@ -136,6 +140,14 @@ def callback_scan(scanmsg):
         request_command(PRIORITY_DICT['TRACK'], [[0,diff * WMAX / mid]], [0.2])
         LAST_DIFF = diff
 
+def callback_line(linemsg):
+    print("Getting Line callback")
+    string = "{0:08b}".format(linemsg.data)
+    print(string)
+
+def callback_dist(distmsg):
+    print(distmsg.data)
+
 #
 #   Terminal Input Loop
 #
@@ -182,6 +194,12 @@ if __name__ == "__main__":
     cmdpub = rospy.Publisher('/vel_cmd', Twist, queue_size=1)
 
     rospy.Subscriber('/scan', LaserScan,   callback_scan, queue_size=1)
+    
+    rospy.Subscriber('/line', Byte, callback_line, queue_size=1)
+    
+    rospy.Subscriber('/dist', Float32MultiArray, callback_dist, queue_size=1)
+    
+    
 
     # And finally, set up a timer to force publication of the obstacle
     # map and waypoints, for us to view in RVIZ.
