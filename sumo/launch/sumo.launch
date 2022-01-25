@@ -43,7 +43,12 @@
 	type="cameratolaserscan.py"
 	output="screen"
 	args="$(arg show)"/>
-
+	
+  <!-- Start line detection node -->
+  <node name="linesensor"
+	pkg="sumo"
+	type="linesensor.py"
+	output="screen"/>
 
   <!-- Start the teleop node SEPARATELY 
   <node name="teleop"
