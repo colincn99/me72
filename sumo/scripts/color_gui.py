@@ -1,10 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import RPi.GPIO as GPIO  
 from time import sleep
 import cv2
 import numpy as np
-import Tkinter as tk
+import tkinter as tk
 import sys
 
 # Get command line argument
@@ -24,7 +24,7 @@ cam = cv2.VideoCapture(0)
 def my_mainloop():
     ret, img = cam.read()
 
-    if mode == 'HSV':
+    if 'HSV' in mode:
         #Filter image by Hue Saturation Value
         img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         # lower boundary RED color range values; Hue (0 - 10)
@@ -42,7 +42,7 @@ def my_mainloop():
         full_mask = lower_mask + upper_mask;
         cv2.imshow('HSV', full_mask)
         cv2.waitKey(2)
-    elif mode == 'BGR':
+    if 'BGR' in mode:
         # Show image filtered by Blue Green Red Values
         lowerb = np.array([l1.get(), l2.get(), l3.get()])
         upperb = np.array([u1.get(), u2.get(), u3.get()])
@@ -50,12 +50,12 @@ def my_mainloop():
         
         cv2.imshow('BGR', red_line)
         cv2.waitKey(2)
-    else:
+    if 'raw' in mode:
         # Show raw image
         cv2.imshow('img', img)
         cv2.waitKey(2)
         
-    master.after(1000, my_mainloop)    
+    master.after(1, my_mainloop)    
 
 try:
     # Initialize GUI
@@ -72,6 +72,13 @@ try:
     u2.grid(row=2, column=2)
     u3 = tk.Scale(master, from_=0, to=255)
     u3.grid(row=2, column=3)
+    
+    l1.set(0)
+    l2.set(0)
+    l3.set(200)
+    u1.set(200)
+    u2.set(200)
+    u3.set(255)
 
     master.after(1000, my_mainloop)
     master.mainloop()

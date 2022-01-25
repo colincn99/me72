@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import cv2
 import time
@@ -7,6 +7,10 @@ if __name__ == '__main__' :
 
     # Start default camera
     video = cv2.VideoCapture(0);
+    #video.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    #video.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    #video.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc('m','j','p','g'))
+    #video.set(cv2.CAP_PROP_FPS, 10)
 
     # Find OpenCV version
     (major_ver, minor_ver, subminor_ver) = (cv2.__version__).split('.')

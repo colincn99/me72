@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 #   cameratolaserscan.py
 #
@@ -16,7 +16,6 @@
 import math
 import numpy as np
 import rospy
-import tf2_ros
 import sys
 import RPi.GPIO as GPIO
 import cv2
@@ -82,8 +81,8 @@ if __name__ == "__main__":
         ret, img = cam.read()
         
         # Set bounds on BGR values and create a mask
-        lowerb = np.array([0, 0, 30])
-        upperb = np.array([50, 50, 255])
+        lowerb = np.array([0, 0, 200])
+        upperb = np.array([200, 200, 255])
         red_line = cv2.inRange(img, lowerb, upperb)
         
         # Show image if argument provided
