@@ -6,7 +6,7 @@
 #
 #   Node:       /cameratolaserscan
 #
-#   Params:     show
+#   Params:     show ('BGR' or 'raw')
 #
 #   Subscribe:  None
 #
@@ -46,77 +46,86 @@ FOV_Y = 1.2 # Maximum vertical field of view angle in radians
 #   Main Code
 ######################################################################
 if __name__ == "__main__":
-    # Initialize the ROS node.
-    rospy.init_node('cameratolaserscan')
-    
-    # Create a publisher for the laser scan.
-    pub = rospy.Publisher(SCAN_TOPIC, LaserScan, queue_size=10)
-    
-    # Show images if argument is provided
-    argv = rospy.myargv(argv=sys.argv)
-    if len(argv) != 2:
-        show = False
-    else:
-        show = argv[1] == 'show'
-    
-    # Set up the laser
-    GPIO.setmode(GPIO.BCM)
-    power_pin = 16
-    GPIO.setup(power_pin, GPIO.OUT)
-    GPIO.output(power_pin, 1)
-    
-    # Set up the camera
-    cam = cv2.VideoCapture(0)
-    ret, img = cam.read()
-    
-    # Evaluate constants
-    h_middle = img.shape[0] / 2
-    pixel_ratio = h_middle / np.tan(FOV_Y / 2)
-    angle_inc = FOV_X / img.shape[1]
-    
-    
-    while not rospy.is_shutdown():
-        timestamp = rospy.Time.now()
-        
+    try:
+        # Initialize the ROS node.
+        rospy.init_node('cameratolaserscan')
+
+        # Create a publisher for the laser scan.
+        pub = rospy.Publisher(SCAN_TOPIC, LaserScan, queue_size=10)
+
+        # Show images if argument is provided
+        argv = rospy.myargv(argv=sys.argv)
+        if len(argv) != 2:
+            show = False
+        else:
+            show = argv[1]
+
+        print(show)
+
+        # Set up the laser
+        GPIO.setmode(GPIO.BCM)
+        power_pin = 16
+        GPIO.setup(power_pin, GPIO.OUT)
+        GPIO.output(power_pin, 1)
+
+        # Set up the camera
+        cam = cv2.VideoCapture(0)
         ret, img = cam.read()
-        
-        # Set bounds on BGR values and create a mask
-        lowerb = np.array([0, 0, 200])
-        upperb = np.array([200, 200, 255])
-        red_line = cv2.inRange(img, lowerb, upperb)
-        
-        # Show image if argument provided
-        if show:
-            cv2.imshow('red', red_line)
-            cv2.waitKey(2)
-        
-        # Formatting for next line
-        x = red_line 
-        
-        # Find the bottommost nonzero element in every column
-        h_raw = np.where(np.count_nonzero(x, axis=0)==0, -1, (x.shape[0]-1) - np.argmin(x[::-1,:]==0, axis=0))
-        
-        # Evaluate range based on height in picture
-        h = h_raw - h_middle
-        phi = np.arctan(h / pixel_ratio)
-        ranges = OFFSET_Y / np.tan(CAMERA_ANGLE + phi)
-        ranges[np.where(h_raw == -1)] = -1
 
-        # Create scan msg.
-        scanmsg = LaserScan()
-        scanmsg.header.stamp    = timestamp
-        scanmsg.header.frame_id = 'base'
-        scanmsg.angle_min       = -FOV_X/2
-        scanmsg.angle_max       =  FOV_X/2
-        scanmsg.angle_increment = angle_inc
-        scanmsg.time_increment  = 0.0
-        scanmsg.scan_time       = 1/30.0
-        scanmsg.range_min       = RANGE_MINIMUM     # minimum range value [m]
-        scanmsg.range_max       = RANGE_MAXIMUM     # maximum range value [m]
-        scanmsg.ranges          = ranges
+        # Evaluate constants
+        h_middle = img.shape[0] / 2
+        pixel_ratio = h_middle / np.tan(FOV_Y / 2)
+        angle_inc = FOV_X / img.shape[1]
 
-        # Publish.
-        pub.publish(scanmsg)
-  
-    rospy.loginfo("End convert image to laser scan.")
-    GPIO.cleanup()
+
+        while not rospy.is_shutdown():
+            timestamp = rospy.Time.now()
+
+            ret, img = cam.read()
+
+            # Set bounds on BGR values and create a mask
+            lowerb = np.array([0, 0, 200])
+            upperb = np.array([150, 150, 255])
+            red_line = cv2.inRange(img, lowerb, upperb)
+
+            # Show image if argument provided
+            if 'BGR' in show:
+                cv2.imshow('red', red_line)
+                cv2.waitKey(2)
+            if 'raw' in show:
+                cv2.imshow('raw', img)
+                cv2.waitKey(2)
+
+            # Formatting for next line
+            x = red_line
+
+            # Find the bottommost nonzero element in every column
+            h_raw = np.where(np.count_nonzero(x, axis=0)==0, -1, (x.shape[0]-1) - np.argmin(x[::-1,:]==0, axis=0))
+
+            # Evaluate range based on height in picture
+            h = h_raw - h_middle
+            phi = np.arctan(h / pixel_ratio)
+            ranges = OFFSET_Y / np.tan(CAMERA_ANGLE + phi)
+            ranges[np.where(h_raw == -1)] = -1
+
+            # Create scan msg.
+            scanmsg = LaserScan()
+            scanmsg.header.stamp    = timestamp
+            scanmsg.header.frame_id = 'base'
+            scanmsg.angle_min       = -FOV_X/2
+            scanmsg.angle_max       =  FOV_X/2
+            scanmsg.angle_increment = angle_inc
+            scanmsg.time_increment  = 0.0
+            scanmsg.scan_time       = 1/30.0
+            scanmsg.range_min       = RANGE_MINIMUM     # minimum range value [m]
+            scanmsg.range_max       = RANGE_MAXIMUM     # maximum range value [m]
+            scanmsg.ranges          = ranges
+
+            # Publish.
+            pub.publish(scanmsg)
+
+        rospy.loginfo("End convert image to laser scan.")
+        GPIO.cleanup()
+
+    except KeyboardInterrupt:          # trap a CTRL+C keyboard interrupt
+        GPIO.cleanup()                 # resets all GPIO ports used by this program

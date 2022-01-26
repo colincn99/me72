@@ -37,7 +37,7 @@ from PlanarTransform import PlanarTransform
 
 
 #   Constants
-KEY_TIMEOUT    = 0.35 # Keyboard Timeout
+START_DELAY   = 1.0   # Keyboard Timeout
 CMD_DT = 0.02         # Time between sending commands
 
 VMAX = 20.0           # Max forward speed (m/s)
@@ -92,6 +92,8 @@ def callback_timer(event):
         cmdpub.publish(cmdmsg)
         return
     
+    print("Doing Something")
+    
     now = event.current_real
     # Check if current command is still valid
     if now-CMD_TIME > rospy.Duration(CMD_LEN[0]):
@@ -141,12 +143,10 @@ def callback_scan(scanmsg):
         LAST_DIFF = diff
 
 def callback_line(linemsg):
-    print("Getting Line callback")
     string = "{0:08b}".format(linemsg.data)
-    print(string)
 
 def callback_dist(distmsg):
-    print(distmsg.data)
+    pass
 
 #
 #   Terminal Input Loop
@@ -160,8 +160,8 @@ def loop(screen):
     screen.erase()
     screen.addstr(0, 0, "Hold r for ramming and t for tracking only")
     Tactive = 0.0
-    RAM_TIME = rospy.Time(0)
-    TRACK_TIME = rospy.Time(0)
+    RAM_TIME = None
+    TRACK_TIME = None
 
     # Run the servo loop until shutdown.
     while not rospy.is_shutdown():
@@ -170,15 +170,18 @@ def loop(screen):
         if keycode == ord('q'):
             RAM = False
             TRACK = False
-            break
+            RAM_TIME = None
+            TRACK_TIME = None
         
         if keycode == ord('r'):
             RAM_TIME = now
         elif keycode == ord('t'):
             TRACK_TIME = now
-            
-        RAM = now-RAM_TIME < rospy.Duration(KEY_TIMEOUT)
-        TRACK = now-TRACK_TIME < rospy.Duration(KEY_TIMEOUT) or RAM
+        
+        if RAM_TIME is not None:
+            RAM = now-RAM_TIME > rospy.Duration(START_DELAY)
+        if TRACK_TIME is not None:
+            TRACK = now-TRACK_TIME > rospy.Duration(START_DELAY) or RAM
 
         # Wait for the next turn.
         servo.sleep()
