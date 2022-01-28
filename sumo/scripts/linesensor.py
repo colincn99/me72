@@ -19,8 +19,10 @@ from time import sleep
 
 # Set up line laser input pin
 GPIO.setmode(GPIO.BCM)
-input_pin = 12
-GPIO.setup(input_pin, GPIO.IN)
+input_pins = [12]
+N_PINS = len(input_pins)
+for i in range(N_PINS):
+    GPIO.setup(input_pins[i], GPIO.IN)
 
 # Set up ROS
 rospy.init_node('linesensor')
@@ -31,14 +33,15 @@ try:
     while not rospy.is_shutdown():
         linemsg = Byte()
         num = 0
-        input_read = int(GPIO.input(input_pin))
-        num += input_read
+        for i in range(N_PINS):
+            pin = input_pins[i]
+            input_read = int(GPIO.input(pin))
+            num += input_read * 2**i
         
         # Check if any line sensors have made detections
         if num != 0:
             linemsg.data = num
-            print("Sending from linesensor.py")
-            pub.publish(num)
+            pub.publish(linemsg)
         servo.sleep()
   
 except KeyboardInterrupt:          # trap a CTRL+C keyboard interrupt

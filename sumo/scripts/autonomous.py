@@ -38,16 +38,23 @@ from PlanarTransform import PlanarTransform
 
 #   Constants
 START_DELAY   = 1.0   # Keyboard Timeout
-CMD_DT = 0.02         # Time between sending commands
+CMD_DT = 0.005         # Time between sending commands
 
 VMAX = 20.0           # Max forward speed (m/s)
 WMAX = 20.0           # Max angular speed (rad/s)
 
-LASER_THRESH = 0.2    # Proportion of angles needed for detection
+LASER_THRESH = 0.05    # Proportion of angles needed for detection
 
 # First elements are acted on first
-PRIORITY_LIST = ['RAM', 'TRACK']
+PRIORITY_LIST = ['RAM',       #
+                 'EDGE',      #
+                 'TRACK_CAM', #
+                 'TRACK_IR',  #
+                 'TRACK_NONE' #
+                 ]
 PRIORITY_DICT = {k: v for v, k in enumerate(PRIORITY_LIST)}
+
+N_LINE = 4
 
 #
 #   Global Variables
@@ -55,9 +62,8 @@ PRIORITY_DICT = {k: v for v, k in enumerate(PRIORITY_LIST)}
 LAST_DIFF = 1e-6   # Arbitrary small positive number
 
 CMD_PRIORITY = 1e6 # Arbitrary large number
-CMD = []           # Array of tuples of commands 
-CMD_LEN = []       # Array of command lengths
-CMD_TIME = rospy.Time(0)  # Time when the first command in the list starts
+CMD = []           # Array of commands (v, omega, command end time from start)
+CMD_TIME = rospy.Time(0)  # Time when the trajectory command starts
 
 # Curses Interface for modes
 RAM = False
@@ -65,54 +71,53 @@ TRACK = False
 
 # Used by other functions/sensor to request a command
 # Requests will be blocked if the priority is lower than an active command
-def request_command(priority, cmd, cmd_len):
-    global CMD_PRIORITY, CMD, CMD_LEN, CMD_TIME
+def request_command(priority, cmd):
+    global CMD_PRIORITY, CMD, CMD_TIME
     
+    if isinstance(priority, str):
+        priority = PRIORITY_DICT[priority]
     now = rospy.Time.now()
-    if priority > CMD_PRIORITY: #allow command through if same or higher priority
-        if len(CMD) >= 2: # Block if multiple commands in queue
-            return
-        if len(CMD) == 1: # Block if final command still valid
-            if now-CMD_TIME < rospy.Duration(CMD_LEN[0]):
-                return
+    if priority <= CMD_PRIORITY: #allow command through if same more higher priority
+        CMD_PRIORITY = priority
+        CMD = cmd
+        CMD_TIME = now
 
-    CMD_PRIORITY = priority
-    CMD = cmd
-    CMD_LEN = cmd_len
-    CMD_TIME = now
+# Removes parts of the current command that are no longer valid
+# Ensures the current command is valid to currently run
+# If command is finished, sets priority to infinite
+def update_cur_cmd(now):
+    global CMD_PRIORITY, CMD
+    
+    while len(CMD) != 0:
+        if now-CMD_TIME < rospy.Duration(CMD[0][2]):
+            return
+        else:
+            CMD.pop(0)
+            
+    if len(CMD) == 0:
+        CMD_PRIORITY = 1e6
 
 #   Execute velocity commands on a timer based on current commands
 def callback_timer(event):
     global CMD_PRIORITY, CMD, CMD_LEN, CMD_TIME
-        
-    if len(CMD) == 0 or not(RAM or TRACK): # Do nothing if no command
-        cmdmsg = Twist()
-        cmdmsg.linear.x  = 0
-        cmdmsg.angular.z = 0
-        cmdpub.publish(cmdmsg)
-        return
-    
-    print("Doing Something")
     
     now = event.current_real
-    # Check if current command is still valid
-    if now-CMD_TIME > rospy.Duration(CMD_LEN[0]):
-        #Remove command if invalid
-        CMD_LEN.pop(0)
-        CMD.pop(0)
-        if len(CMD) == 0: # Do nothing if no command
-            cmdmsg = Twist()
-            cmdmsg.linear.x  = 0
-            cmdmsg.angular.z = 0
-            cmdpub.publish(cmdmsg)
-            return
-        
-        CMD_TIME = now
-    
-    #Send velocity command
+    update_cur_cmd(now)
     cmdmsg = Twist()
-    cmdmsg.linear.x  = CMD[0][0]
-    cmdmsg.angular.z = CMD[0][1]
+    
+    if len(CMD) == 0 or not(RAM or TRACK):
+        # Send stop command
+        cmdmsg.linear.x  = 0
+        cmdmsg.angular.z = 0
+    else:
+        # Send velocity command
+        if CMD_PRIORITY == 0:
+            print('Sending RAM')
+        else:
+            print('Sending TRACK')
+        cmdmsg.linear.x  = CMD[0][0]
+        cmdmsg.angular.z = CMD[0][1]
+    
     cmdpub.publish(cmdmsg)
 
 #   Process the Laser Scan
@@ -130,20 +135,27 @@ def callback_scan(scanmsg):
     left_count = np.count_nonzero(left+1)
     right_count = np.count_nonzero(right+1)
     diff = left_count - right_count
+    l_detect = left_count > LASER_THRESH * mid
+    r_detect = right_count > LASER_THRESH * mid
 
-    if left_count > LASER_THRESH * mid and \
-        right_count > LASER_THRESH * mid and \
-        RAM: #Move forward if enough hits on both sides
-            request_command(PRIORITY_DICT['RAM'], [[VMAX,diff * WMAX / mid]], [0.2])
-    elif left_count < LASER_THRESH * mid and \
-        right_count < LASER_THRESH * mid: #Track towards side with more hits
-            request_command(PRIORITY_DICT['TRACK'], [[0,WMAX * np.sign(LAST_DIFF)]], [0.2])
-    else: #Track towards sign which previously had the most hits if both under threshold
-        request_command(PRIORITY_DICT['TRACK'], [[0,diff * WMAX / mid]], [0.2])
+    if l_detect and r_detect and RAM:
+        #Move forward if enough hits on both sides
+        request_command('RAM', [[VMAX, diff * WMAX / mid, 0.25]])
+    elif not l_detect and not r_detect:
+        #Track towards sign which previously had the most hits if both under threshold
+        request_command('TRACK_CAM', [[0, WMAX * np.sign(LAST_DIFF), 0.06]])
+    else:
+        #Track towards side with more hits
+        request_command('TRACK_CAM', [[0, diff * WMAX / mid, 0.06]])
         LAST_DIFF = diff
 
 def callback_line(linemsg):
     string = "{0:08b}".format(linemsg.data)
+    line_bool = [False] * N_LINE
+    for i in range(N_LINE):
+        line_bool[i] = string[7-i] == '1'
+    print(line_bool)
+    
 
 def callback_dist(distmsg):
     pass
@@ -193,17 +205,11 @@ def loop(screen):
 if __name__ == "__main__":
     # Initialize the ROS node.
     rospy.init_node('autonomous')
-
     cmdpub = rospy.Publisher('/vel_cmd', Twist, queue_size=1)
-
-    rospy.Subscriber('/scan', LaserScan,   callback_scan, queue_size=1)
-    
-    rospy.Subscriber('/line', Byte, callback_line, queue_size=1)
-    
+    rospy.Subscriber('/scan', LaserScan,   callback_scan, queue_size=1) 
+    rospy.Subscriber('/line', Byte, callback_line, queue_size=1)   
     rospy.Subscriber('/dist', Float32MultiArray, callback_dist, queue_size=1)
     
-    
-
     # And finally, set up a timer to force publication of the obstacle
     # map and waypoints, for us to view in RVIZ.
     timer = rospy.Timer(rospy.Duration(CMD_DT), callback_timer)
@@ -214,13 +220,15 @@ if __name__ == "__main__":
     # Setup curses gui
     servo = rospy.Rate(100)
     dt    = servo.sleep_dur.to_sec()
+    
+    # Run Terminal loop
     try:
         curses.wrapper(loop)
     except KeyboardInterrupt:
         pass
     
     # Send a stop command
-    request_command(0, [[0,0]], [1])
+    request_command(0, [[0, 0, 1]])
     rospy.sleep(0.25)
     rospy.loginfo("Autonomy node stopped.")
 

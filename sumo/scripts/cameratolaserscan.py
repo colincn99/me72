@@ -60,8 +60,6 @@ if __name__ == "__main__":
         else:
             show = argv[1]
 
-        print(show)
-
         # Set up the laser
         GPIO.setmode(GPIO.BCM)
         power_pin = 16
