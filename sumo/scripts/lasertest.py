@@ -5,7 +5,7 @@ from time import sleep
 
 # Set up laser
 GPIO.setmode(GPIO.BCM)
-power_pin = 16
+power_pin = 21
 GPIO.setup(power_pin, GPIO.OUT)  
   
 try:  

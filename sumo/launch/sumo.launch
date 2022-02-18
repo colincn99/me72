@@ -49,6 +49,14 @@
 	pkg="sumo"
 	type="linesensor.py"
 	output="screen"/>
+	
+  <!-- Start IR distance node -->
+  <node name="distsensor"
+	pkg="sumo"
+	type="distsensor.py"
+	output="screen"/>
+	
+
 
   <!-- Start the teleop node SEPARATELY 
   <node name="teleop"

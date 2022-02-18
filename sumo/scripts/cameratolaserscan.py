@@ -62,7 +62,7 @@ if __name__ == "__main__":
 
         # Set up the laser
         GPIO.setmode(GPIO.BCM)
-        power_pin = 16
+        power_pin = 21
         GPIO.setup(power_pin, GPIO.OUT)
         GPIO.output(power_pin, 1)
 

@@ -7,7 +7,7 @@ import sys
 
 from std_msgs.msg      import Float32MultiArray
 
-import RPi.GPIO as GPIO  
+import RPi.GPIO as GPIO
 
 # Import the ADS1x15 module.
 import Adafruit_ADS1x15
@@ -38,8 +38,8 @@ GAIN = 1
 rospy.init_node('distsensor')
 pub = rospy.Publisher('/dist', Float32MultiArray, queue_size=10)
 servo = rospy.Rate(10)
-  
-try:  
+
+try:
     while not rospy.is_shutdown():
         distmsg = Float32MultiArray()
         values = [0]*4
@@ -49,12 +49,11 @@ try:
             v = values[i] * (3.3 / 32768.0)
             dist = 16.2537 * v**4 - 129.893 * v**3 + 382.268 * v**2 - 512.611 * v + 301.439
             values[i] = dist
-        
+
         distmsg.data = values
-        print("Sending from linesensor.py")
         pub.publish(distmsg)
         servo.sleep()
-  
+
 except KeyboardInterrupt:          # trap a CTRL+C keyboard interrupt
     rospy.loginfo("End convert image to laser scan.")
     GPIO.cleanup()                 # resets all GPIO ports used by this program

@@ -13,9 +13,10 @@ if __name__ == "__main__":
     
     try:  
         while True:
-            roboclaw.ForwardM1(address,10)
-            sleep(1)
-            roboclaw.ForwardM1(address,0)
+            roboclaw.ForwardM1(address,15)
+            roboclaw.ForwardM2(address,15)
+            sleep(.5)
+            #roboclaw.ForwardM1(address,0)
             sleep(0.25)
             print(roboclaw.ReadVersion(address))
 

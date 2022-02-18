@@ -19,7 +19,7 @@ from time import sleep
 
 # Set up line laser input pin
 GPIO.setmode(GPIO.BCM)
-input_pins = [12]
+input_pins = [20, 26]
 N_PINS = len(input_pins)
 for i in range(N_PINS):
     GPIO.setup(input_pins[i], GPIO.IN)

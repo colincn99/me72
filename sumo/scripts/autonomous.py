@@ -45,6 +45,9 @@ WMAX = 20.0           # Max angular speed (rad/s)
 
 LASER_THRESH = 0.05    # Proportion of angles needed for detection
 
+IR_NORM = 20 #Set later
+IR_THRESH = 2 #Set later
+
 # First elements are acted on first
 PRIORITY_LIST = ['RAM',       #
                  'EDGE',      #
@@ -54,6 +57,8 @@ PRIORITY_LIST = ['RAM',       #
                  ]
 PRIORITY_DICT = {k: v for v, k in enumerate(PRIORITY_LIST)}
 
+N_MODES = len(PRIORITY_LIST)
+
 N_LINE = 4
 
 #
@@ -61,9 +66,9 @@ N_LINE = 4
 #
 LAST_DIFF = 1e-6   # Arbitrary small positive number
 
-CMD_PRIORITY = 1e6 # Arbitrary large number
-CMD = []           # Array of commands (v, omega, command end time from start)
-CMD_TIME = rospy.Time(0)  # Time when the trajectory command starts
+CMD_PRIORITY = N_MODES # Arbitrary large number
+CMD = [[]] * N_MODES          # Array of commands (v, omega, command end time from start)
+CMD_TIME = [rospy.Time(0)] * N_MODES  # Time when the trajectory command starts
 
 # Curses Interface for modes
 RAM = False
@@ -77,10 +82,12 @@ def request_command(priority, cmd):
     if isinstance(priority, str):
         priority = PRIORITY_DICT[priority]
     now = rospy.Time.now()
+    
+    CMD[priority] = cmd
+    CMD_TIME[priority] = now
+    
     if priority <= CMD_PRIORITY: #allow command through if same more higher priority
         CMD_PRIORITY = priority
-        CMD = cmd
-        CMD_TIME = now
 
 # Removes parts of the current command that are no longer valid
 # Ensures the current command is valid to currently run
@@ -88,14 +95,16 @@ def request_command(priority, cmd):
 def update_cur_cmd(now):
     global CMD_PRIORITY, CMD
     
-    while len(CMD) != 0:
-        if now-CMD_TIME < rospy.Duration(CMD[0][2]):
-            return
-        else:
-            CMD.pop(0)
-            
-    if len(CMD) == 0:
-        CMD_PRIORITY = 1e6
+    while CMD_PRIORITY < N_MODES:
+        cmd = CMD[CMD_PRIORITY]
+        while len(cmd) != 0:
+            if now-CMD_TIME[CMD_PRIORITY] < rospy.Duration(cmd[0][2]):
+                return
+            else:
+                cmd.pop(0)
+                
+        if len(cmd) == 0:
+            CMD_PRIORITY += 1
 
 #   Execute velocity commands on a timer based on current commands
 def callback_timer(event):
@@ -105,18 +114,18 @@ def callback_timer(event):
     update_cur_cmd(now)
     cmdmsg = Twist()
     
-    if len(CMD) == 0 or not(RAM or TRACK):
+    if CMD_PRIORITY >= N_MODES or not(RAM or TRACK):
         # Send stop command
         cmdmsg.linear.x  = 0
         cmdmsg.angular.z = 0
     else:
         # Send velocity command
-        if CMD_PRIORITY == 0:
-            print('Sending RAM')
-        else:
-            print('Sending TRACK')
-        cmdmsg.linear.x  = CMD[0][0]
-        cmdmsg.angular.z = CMD[0][1]
+        #if CMD_PRIORITY == 0:
+        #    print('Sending RAM')
+        #else:
+        #    print('Sending TRACK')
+        cmdmsg.linear.x  = CMD[CMD_PRIORITY][0][0]
+        cmdmsg.angular.z = CMD[CMD_PRIORITY][0][1]
     
     cmdpub.publish(cmdmsg)
 
@@ -151,14 +160,33 @@ def callback_scan(scanmsg):
 
 def callback_line(linemsg):
     string = "{0:08b}".format(linemsg.data)
-    line_bool = [False] * N_LINE
+    line_bool = [False] * N_LINE    
     for i in range(N_LINE):
         line_bool[i] = string[7-i] == '1'
-    print(line_bool)
     
+    if line_bool[0] or line_bool[1]:
+        request_command('EDGE', [[-VMAX, 0, 0.05], [0, WMAX, 0.05]])
+    elif line_bool[2] or line_bool[3]:
+        request_command('EDGE', [[VMAX, 0, 0.05], [0, WMAX, 0.05]])
 
 def callback_dist(distmsg):
-    pass
+    data = distmsg.data
+    #print(data)
+    if np.abs(data[2] - IR_NORM) > IR_THRESH:
+        request_command('RAM', [[VMAX, 0, 0.06]])
+        return
+    else:
+        request_command('TRACK_IR', [[0, WMAX, 0.1]])
+        return
+    #if np.abs(data[1] - IR_NORM) > IR_THRESH:
+    #    request_command('TRACK_IR', [[0, WMAX, 0.06]])
+    #    return
+    #if np.abs(data[2] - IR_NORM) > IR_THRESH:
+    #    request_command('TRACK_IR', [[0, -WMAX, 0.06]])
+    #    return
+    #if np.abs(data[3] - IR_NORM) > IR_THRESH:
+    #    request_command('TRACK_IR', [[0, WMAX, 0.1]])
+    #    return
 
 #
 #   Terminal Input Loop
