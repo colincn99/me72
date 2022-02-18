@@ -13,7 +13,7 @@ if __name__ == "__main__":
     
     try:  
         while True:
-            roboclaw.ForwardM1(address,15)
+            #roboclaw.ForwardM1(address,15)
             roboclaw.ForwardM2(address,15)
             sleep(.5)
             #roboclaw.ForwardM1(address,0)
@@ -22,4 +22,4 @@ if __name__ == "__main__":
 
     except KeyboardInterrupt:
         roboclaw.ForwardM1(address,0)
-        
+        roboclaw.ForwardM2(address,0)

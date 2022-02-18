@@ -49,7 +49,8 @@ try:
             v = values[i] * (3.3 / 32768.0)
             dist = 16.2537 * v**4 - 129.893 * v**3 + 382.268 * v**2 - 512.611 * v + 301.439
             values[i] = dist
-
+            
+        print(values)
         distmsg.data = values
         pub.publish(distmsg)
         servo.sleep()

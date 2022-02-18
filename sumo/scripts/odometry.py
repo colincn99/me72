@@ -52,8 +52,8 @@ def callback_vel_cmd(msg):
     # Create the wheel command msg and publish.
     msg_wcmd = JointState()
     msg_wcmd.header.stamp = rospy.Time.now()
-    msg_wcmd.name         = ['M1', 'M2']
-    msg_wcmd.velocity     = [lpsi_dot, rpsi_dot]
+    msg_wcmd.name         = ['M2', 'M1']
+    msg_wcmd.velocity     = [lpsi_dot, -rpsi_dot]
     pub_wcmd.publish(msg_wcmd)
 
 

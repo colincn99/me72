@@ -20,6 +20,7 @@ import rospy
 import sys
 import tf2_ros
 import curses
+import random
 
 from geometry_msgs.msg      import Point
 from geometry_msgs.msg      import PoseStamped
@@ -40,20 +41,24 @@ from PlanarTransform import PlanarTransform
 START_DELAY   = 1.0   # Keyboard Timeout
 CMD_DT = 0.005         # Time between sending commands
 
-VMAX = 20.0           # Max forward speed (m/s)
+VMAX = 30.0           # Max forward speed (m/s)
 WMAX = 20.0           # Max angular speed (rad/s)
 
-LASER_THRESH = 0.05    # Proportion of angles needed for detection
+LASER_THRESH = 0.15    # Proportion of angles needed for detection
 
-IR_NORM = 20 #Set later
-IR_THRESH = 2 #Set later
+N_IR = 3
+IR_THRESH = 70
+IR_MINCOUNT = 5
+IR_COUNTS = [0.0] * N_IR
 
 # First elements are acted on first
-PRIORITY_LIST = ['RAM',       #
-                 'EDGE',      #
-                 'TRACK_CAM', #
+PRIORITY_LIST = ['EDGE',       #
+                 'RAM_IR',      #
                  'TRACK_IR',  #
-                 'TRACK_NONE' #
+                 'RAM_CAM',
+                 'TRACK_CAM', #
+                 'TRACK_NONE', #
+                 'RANDOM'
                  ]
 PRIORITY_DICT = {k: v for v, k in enumerate(PRIORITY_LIST)}
 
@@ -114,6 +119,8 @@ def callback_timer(event):
     update_cur_cmd(now)
     cmdmsg = Twist()
     
+    
+    
     if CMD_PRIORITY >= N_MODES or not(RAM or TRACK):
         # Send stop command
         cmdmsg.linear.x  = 0
@@ -124,6 +131,7 @@ def callback_timer(event):
         #    print('Sending RAM')
         #else:
         #    print('Sending TRACK')
+        print(PRIORITY_LIST[CMD_PRIORITY])
         cmdmsg.linear.x  = CMD[CMD_PRIORITY][0][0]
         cmdmsg.angular.z = CMD[CMD_PRIORITY][0][1]
     
@@ -135,6 +143,8 @@ def callback_scan(scanmsg):
     
     # Extract the angles and ranges from the scan information.
     ranges = np.array(scanmsg.ranges)
+    #print("Max:", np.max(ranges))
+    #print("Min:", np.min(ranges))
     #alphas = (scanmsg.angle_min + scanmsg.angle_increment * np.arange(len(ranges)))
     
     #Calculate which side has more laser scan hits
@@ -147,36 +157,50 @@ def callback_scan(scanmsg):
     l_detect = left_count > LASER_THRESH * mid
     r_detect = right_count > LASER_THRESH * mid
 
-    if l_detect and r_detect and RAM:
+    if l_detect and r_detect:
         #Move forward if enough hits on both sides
-        request_command('RAM', [[VMAX, diff * WMAX / mid, 0.25]])
+        request_command('RAM_CAM', [[VMAX, diff * WMAX / mid, 0.25]])
+        
     elif not l_detect and not r_detect:
         #Track towards sign which previously had the most hits if both under threshold
         request_command('TRACK_CAM', [[0, WMAX * np.sign(LAST_DIFF), 0.06]])
     else:
+        return
         #Track towards side with more hits
         request_command('TRACK_CAM', [[0, diff * WMAX / mid, 0.06]])
         LAST_DIFF = diff
 
 def callback_line(linemsg):
+    return
     string = "{0:08b}".format(linemsg.data)
     line_bool = [False] * N_LINE    
     for i in range(N_LINE):
         line_bool[i] = string[7-i] == '1'
     
+    print(string)
+    
     if line_bool[0] or line_bool[1]:
-        request_command('EDGE', [[-VMAX, 0, 0.05], [0, WMAX, 0.05]])
-    elif line_bool[2] or line_bool[3]:
-        request_command('EDGE', [[VMAX, 0, 0.05], [0, WMAX, 0.05]])
+        request_command('EDGE', [[-VMAX, 0, 0.5], [0, WMAX, 1]])
+    #elif line_bool[2] or line_bool[3]:
+    #    request_command('EDGE', [[-VMAX, 0, 0.5], [0, WMAX, 0.55]])
 
 def callback_dist(distmsg):
     data = distmsg.data
     #print(data)
-    if np.abs(data[2] - IR_NORM) > IR_THRESH:
-        request_command('RAM', [[VMAX, 0, 0.06]])
+    for i in range(N_IR):
+        if data[i] < IR_THRESH:
+            IR_COUNTS[i] += 1
+        else:
+            IR_COUNTS[i] = 0
+    
+    if IR_COUNTS[2] >= IR_MINCOUNT: #forward
+        request_command('RAM_IR', [[VMAX, 0, 0.1]])
         return
-    else:
+    if IR_COUNTS[0] >= IR_MINCOUNT: #right#
         request_command('TRACK_IR', [[0, WMAX, 0.1]])
+        return
+    if IR_COUNTS[1] >= IR_MINCOUNT: #left
+        request_command('TRACK_IR', [[0, -WMAX, 0.1]])
         return
     #if np.abs(data[1] - IR_NORM) > IR_THRESH:
     #    request_command('TRACK_IR', [[0, WMAX, 0.06]])
@@ -188,6 +212,14 @@ def callback_dist(distmsg):
     #    request_command('TRACK_IR', [[0, WMAX, 0.1]])
     #    return
 
+def callback_random(event):
+    i = random.randrange(2)
+    twist = random.uniform(-WMAX, WMAX)
+    speed = random.uniform(0, VMAX)
+    if i == 0:
+        request_command('RANDOM', [[VMAX, 0, .5]])
+    elif i == 1:
+        request_command('RANDOM', [[speed, twist, 0.5]])
 #
 #   Terminal Input Loop
 #
@@ -212,6 +244,7 @@ def loop(screen):
             TRACK = False
             RAM_TIME = None
             TRACK_TIME = None
+            break
         
         if keycode == ord('r'):
             RAM_TIME = now
@@ -241,6 +274,7 @@ if __name__ == "__main__":
     # And finally, set up a timer to force publication of the obstacle
     # map and waypoints, for us to view in RVIZ.
     timer = rospy.Timer(rospy.Duration(CMD_DT), callback_timer)
+    timer_slow = rospy.Timer(rospy.Duration(CMD_DT*5), callback_random)
 
     # Report and spin (waiting while callbacks do their work).
     rospy.loginfo("Autonomy node spinning...")

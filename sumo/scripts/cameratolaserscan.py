@@ -31,15 +31,15 @@ from sensor_msgs.msg   import LaserScan
 #
 TIMEOUT = 5.0           # Timeout for the initialization
 RANGE_MINIMUM = 0.0  # minimum range value [m]
-RANGE_MAXIMUM = 3.0   # maximum range value [m]
+RANGE_MAXIMUM = 1.5   # maximum range value [m]
 
 SCAN_TOPIC  = '/scan'
 
 OFFSET_X = 0.0 # X offset from base frame to camera frame
-OFFSET_Y = 0.2 # Y Offset from base frame to camera frame
-CAMERA_ANGLE = 0.3 # downward angle with horizontal in radians
-FOV_X = 1.2 # Maximum horizontal field of view angle in radians
-FOV_Y = 1.2 # Maximum vertical field of view angle in radians
+OFFSET_Y = 0.06 # Y Offset from base frame to camera frame
+CAMERA_ANGLE = 0.39 # downward angle with horizontal in radians
+FOV_X = 0.977 # Maximum horizontal field of view angle in radians
+FOV_Y = 0.977 * 360/640 # Maximum vertical field of view angle in radians
 
 
 ######################################################################
@@ -82,8 +82,8 @@ if __name__ == "__main__":
             ret, img = cam.read()
 
             # Set bounds on BGR values and create a mask
-            lowerb = np.array([0, 0, 200])
-            upperb = np.array([150, 150, 255])
+            lowerb = np.array([0, 0, 100])
+            upperb = np.array([65, 65, 255])
             red_line = cv2.inRange(img, lowerb, upperb)
 
             # Show image if argument provided
